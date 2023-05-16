@@ -28,8 +28,8 @@ class HeatPumpStudy:
         N=1,
         Q_out=8e3,
         working_fluid="propane",
-        compressor_efficiency=0.85,
-        expander_efficiency=0.85,
+        compressor_efficiency=0.8,
+        expander_efficiency=0.8,
         expansion_device="expansionValve",
     ):
         self.N = N
@@ -60,9 +60,9 @@ class HeatPumpStudy:
         for name, comp_class in component_list:
             self.comp[name] = comp_class(name)
 
-        for comp1, out, comp2, inp, label in connection_list:
+        for comp1, out, comp2, inp in connection_list:
             self.conn[f"{comp1}-{comp2}"] = Connection(
-                self.comp[comp1], out, self.comp[comp2], inp, label=label
+                self.comp[comp1], out, self.comp[comp2], inp, label=f"{comp1}-{comp2}"
             )
 
     def print_components(self):
@@ -111,7 +111,6 @@ class HeatPumpStudy:
         out_port_label: str,
         in_connection_label: str,
         in_port_label: str,
-        conn_label: str,
         out_id_increment=1,
         in_id_increment=1,
         N=-1,
@@ -123,8 +122,7 @@ class HeatPumpStudy:
                 f"{out_connection_label}_{i+out_id_increment}",
                 out_port_label,
                 f"{in_connection_label}_{i+in_id_increment}",
-                in_port_label,
-                f"{conn_label}_{i+1}",
+                in_port_label,                
             )
             for i in range(N)
         ]

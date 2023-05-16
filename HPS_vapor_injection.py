@@ -1,3 +1,4 @@
+import numpy as np
 from HeatPumpStudy import HeatPumpStudy, alternate
 from tespy.components import (
     Valve,
@@ -43,20 +44,21 @@ class VaporInjectionHeatPumpStudy(HeatPumpStudy):
 
         # ------------------- Connections -------------------
         connection_list = [         
-                                    ("cycle_closer", "out1", "evaporator", "in1", "1"),                                                     
-                                    ("evaporator", "out1", "compressor_1", "in1", "2"),
-         *alternate(self.repeat_conn("compressor", "out1", "merge", "in1", "3_1"),
-                    self.repeat_conn("merge", "out1", "compressor", "in1", "3_2", out_id_increment=1, in_id_increment=2)),
-                                    (f"compressor_{N+1}", "out1", "condenser", "in1", "4"),
-                                    ("condenser", "out1", f"{self.expansion_device}_1", "in1", "5_3"),
-         *alternate(self.repeat_conn(self.expansion_device, "out1", "splitter", "in1", "6_1"),
-                    self.repeat_conn("splitter", "out1", self.expansion_device, "in1", "6_2", out_id_increment=1, in_id_increment=2)),
-                                    (f"{self.expansion_device}_{N+1}", "out1", "cycle_closer", "in1", "0"),
+                                    ("cycle_closer", "out1", "evaporator", "in1"),                                                     
+                                    ("evaporator", "out1", "compressor_1", "in1"),
+         *alternate(self.repeat_conn("compressor", "out1", "merge", "in1"),
+                    self.repeat_conn("merge", "out1", "compressor", "in1", out_id_increment=1, in_id_increment=2)),
+                                    (f"compressor_{N+1}", "out1", "condenser", "in1"),
+                                    ("condenser", "out1", f"{self.expansion_device}_1", "in1"),
+         *alternate(self.repeat_conn(self.expansion_device, "out1", "splitter", "in1"),
+                    self.repeat_conn("splitter", "out1", self.expansion_device, "in1", out_id_increment=1, in_id_increment=2)),
+                                    (f"{self.expansion_device}_{N+1}", "out1", "cycle_closer", "in1"),
         ]
         connection_list.extend(
-            (f"splitter_{self.N - i}","out2",f"merge_{i + 1}","in2",f"3_{i + 1}") for i in range(N)
+            (f"splitter_{self.N - i}","out2",f"merge_{i + 1}","in2") for i in range(N)
         )
         # fmt: on
+  
 
         self.add_components_and_connections(component_list, connection_list)
         # self.add_condenser_cooling()# need to change condenser type to Condenser when used and HeatExchangerSimple when not used
@@ -66,12 +68,14 @@ class VaporInjectionHeatPumpStudy(HeatPumpStudy):
 
         p_cond = PSI("P", "Q", 0, "T", 273.15 + T_cond, self.working_fluid) / 1e5
         p_evap = PSI("P", "Q", 1, "T", 273.15 + T_evap, self.working_fluid) / 1e5
-        m0=3.650e-02 #experimental starting value for mass flow
+        p = np.geomspace(p_evap, p_cond, self.N + 2)
+        m0=2 #experimental starting value for mass flow
+
         #self.print_components()
         #self.print_connections()
 
         self.comp["evaporator"].set_attr(pr=0.98)           # certain
-        self.conn["evaporator-compressor_1"].set_attr(      # certain
+        self.conn["evaporator-compressor_1"].set_attr(      
            x=1, p=p_evap, m0=m0, fluid={self.working_fluid: 1, "water": 0}
         )
         # ---------------- efficiencies -------------------
@@ -81,14 +85,14 @@ class VaporInjectionHeatPumpStudy(HeatPumpStudy):
             if self.expansion_device == "expander":
                 self.comp[f"expander_{i+1}"].set_attr(eta_s=self.expander_efficiency) # certain
 
-        self.conn[f"compressor_{self.N+1}-condenser"].set_attr(m=m0,T=T_cond+5) # the goal is to be as close as possible to T_cond at the outlet to reduce temperature difference in the compressor
+        #self.conn[f"compressor_{self.N+1}-condenser"].set_attr(m=m0,T=T_cond+5) # the goal is to be as close as possible to T_cond at the outlet to reduce temperature difference in the compressor
         
         self.comp["condenser"].set_attr(pr=0.98)#, Q=-self.Q_out
         
         if self.expansion_device == "expansionValve":
-            self.conn["condenser-expansionValve_1"].set_attr(x=0)
+            self.conn["condenser-expansionValve_1"].set_attr(x=0,p=p_cond,m=m0)
         elif self.expansion_device == "expander":
-            self.conn["condenser-expander_1"].set_attr(x=0.05)
+            self.conn["condenser-expander_1"].set_attr(x=0.05,p=p_cond,m=m0)
 
         # because our desired conditions have unstable starting values, 
         # we first set the massflow of the injection manually, solve, 
@@ -97,22 +101,27 @@ class VaporInjectionHeatPumpStudy(HeatPumpStudy):
         for conn in self.conn:
             if conn.startswith("splitter") and "merge" in conn:
                 i = int(conn.split("merge_")[1])
-                p = p_evap + (p_cond - p_evap) * (i) / (self.N + 1)
-                self.conn[conn].set_attr(p=p)
-                self.conn[conn].set_attr(m=m0/10/(self.N))
+                print(f"setting pressure of {conn} to {p[i]}")
+                self.conn[conn].set_attr(p=p[i])
+                self.conn[conn].set_attr(m=.2)#m0/10/(self.N))
         
-        self.solve()
+        self.network.solve("design")
         self.network.print_results()
+
+
 
         
         for conn in self.conn:
-            if conn.startswith("merge") and "compressor" in conn:
-                self.conn[conn].set_attr(x=1)
-            elif conn.startswith("splitter") and "merge" in conn:
-                self.conn[conn].set_attr(m=None)
+           if conn.startswith("merge") and "compressor" in conn:
+               self.conn[conn].set_attr(x=1)
+           elif conn.startswith("splitter") and "merge" in conn:
+               self.conn[conn].set_attr(m=None)
+
         #self.conn[f"compressor_{self.N+1}-condenser"].set_attr(m=None)
         #self.comp["condenser"].set_attr(Q=-self.Q_out)
 
+        self.network.solve("design")
+        self.network.print_results()
 
         return self
 
