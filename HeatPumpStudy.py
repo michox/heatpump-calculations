@@ -154,10 +154,10 @@ class HeatPumpStudy:
         self.conn["condenser-consumer"].set_attr(T=40)
         self.comp["consumer"].set_attr(pr=0.99, Q=-self.Q_out)
 
-    def calculate_cop(self):
-        Q = abs(self.comp["condenser"].Q.val)
+    def calculate_cop(self, consumer="condenser"):
+        Q = abs(self.comp[consumer].Q.val)
         W = sum(
-            comp.P.val for comp in self.comp.values() if isinstance(comp, Compressor)
+            comp.P.val for comp in self.comp.values() if isinstance(comp, (Compressor, Turbine))
         )
         return Q / W
 

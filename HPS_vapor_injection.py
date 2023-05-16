@@ -66,53 +66,54 @@ class VaporInjectionHeatPumpStudy(HeatPumpStudy):
 
         p_cond = PSI("P", "Q", 0, "T", 273.15 + T_cond, self.working_fluid) / 1e5
         p_evap = PSI("P", "Q", 1, "T", 273.15 + T_evap, self.working_fluid) / 1e5
-
+        m0=3.650e-02 #experimental starting value for mass flow
         #self.print_components()
         #self.print_connections()
 
         self.comp["evaporator"].set_attr(pr=0.98)           # certain
         self.conn["evaporator-compressor_1"].set_attr(      # certain
-            x=1, m0=3.650e-02, fluid={self.working_fluid: 1, "water": 0}
+           x=1, p=p_evap, m0=m0, fluid={self.working_fluid: 1, "water": 0}
         )
+        # ---------------- efficiencies -------------------
+
         for i in range(self.N+1):
             self.comp[f"compressor_{i+1}"].set_attr(eta_s=self.compressor_efficiency) # certain
             if self.expansion_device == "expander":
                 self.comp[f"expander_{i+1}"].set_attr(eta_s=self.expander_efficiency) # certain
 
-
-        for conn in self.conn:
-
-            if conn.startswith("compressor"):
-                i = int(conn.split("_")[1].split("-")[0])
-                p = p_evap + (p_cond - p_evap) * (i) / (self.N + 1)
-                self.conn[conn].set_attr(p=p)
-
-            elif conn.startswith("merge") and "compressor" in conn:
-                self.conn[conn].set_attr(x=1)
-
-            # elif conn.startswith("splitter") and "merge" in conn:
-            #     i = int(conn.split("splitter_")[1].split("-")[0])
-            #     p = p_evap + (p_cond - p_evap) * (i) / (self.N + 1)
-            #     self.conn[conn].set_attr(p=p)
-            #     self.conn[conn].set_attr(x=0.2)
-                
-            # elif conn.startswith(self.expansion_device):
-            #     i = int(conn.split("_")[1].split("-")[0])
-            #     p = p_evap + (p_cond - p_evap) * (self.N-i+1) / (self.N + 1)
-            #     self.conn[conn].set_attr(p0=p+0.1)
+        self.conn[f"compressor_{self.N+1}-condenser"].set_attr(m=m0,T=T_cond+5) # the goal is to be as close as possible to T_cond at the outlet to reduce temperature difference in the compressor
         
-
-        self.conn[f"compressor_{self.N+1}-condenser"].set_attr(T=T_cond+5) # the goal is to be as close as possible to T_cond at the outlet to reduce temperature difference in the compressor
-        
-        # certain:
-        self.comp["condenser"].set_attr(pr=0.98, Q=-self.Q_out)
+        self.comp["condenser"].set_attr(pr=0.98)#, Q=-self.Q_out
         
         if self.expansion_device == "expansionValve":
             self.conn["condenser-expansionValve_1"].set_attr(x=0)
         elif self.expansion_device == "expander":
             self.conn["condenser-expander_1"].set_attr(x=0.05)
 
+        # because our desired conditions have unstable starting values, 
+        # we first set the massflow of the injection manually, solve, 
+        # then set the compressor intake conditions (x=1)
+
+        for conn in self.conn:
+            if conn.startswith("splitter") and "merge" in conn:
+                i = int(conn.split("merge_")[1])
+                p = p_evap + (p_cond - p_evap) * (i) / (self.N + 1)
+                self.conn[conn].set_attr(p=p)
+                self.conn[conn].set_attr(m=m0/10/(self.N))
         
+        self.solve()
+        self.network.print_results()
+
+        
+        for conn in self.conn:
+            if conn.startswith("merge") and "compressor" in conn:
+                self.conn[conn].set_attr(x=1)
+            elif conn.startswith("splitter") and "merge" in conn:
+                self.conn[conn].set_attr(m=None)
+        #self.conn[f"compressor_{self.N+1}-condenser"].set_attr(m=None)
+        #self.comp["condenser"].set_attr(Q=-self.Q_out)
+
+
         return self
 
 
