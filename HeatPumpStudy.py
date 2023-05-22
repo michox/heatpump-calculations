@@ -27,7 +27,7 @@ class HeatPumpStudy:
         self,
         N=1,
         Q_out=8e3,
-        working_fluid="propane",
+        working_fluid="R290",
         compressor_efficiency=0.8,
         expander_efficiency=0.8,
         expansion_device="expansionValve",
@@ -46,7 +46,7 @@ class HeatPumpStudy:
     def setup_network(self, iterinfo=False):
         self.comp = {}
         self.conn = {}
-        self.network = Network(fluids=[self.working_fluid, "water"], iterinfo=iterinfo)
+        self.network = Network(fluids=[self.working_fluid], iterinfo=iterinfo)
         self.network.set_attr(
             p_unit="bar", T_unit="C", h_unit="kJ / kg", m_unit="kg / s"
         )
