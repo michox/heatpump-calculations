@@ -100,9 +100,6 @@ class InternalCondenserHeatPumpStudy(HeatPumpStudy):
                 if conn.endswith(f"compressor_{i}"):
                     self.conn[conn].set_attr(x=1)
             
-
-
-
         self.comp[f"compressor_{self.N+1}"].set_attr(eta_s=self.compressor_efficiency)
         self.comp["condenser"].set_attr(pr1=0.98, pr2=0.98)
         if self.expansion_device == "expansionValve":

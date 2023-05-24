@@ -78,7 +78,9 @@ class HeatPumpStudy:
         return self
 
     def set_boundary_conditions(self, T_cond=60, T_evap=10):
-        print("setting boundary conditions is not implemented in parent class. use subclass")
+        print(
+            "setting boundary conditions is not implemented in parent class. use subclass"
+        )
         # throw error: function not implemented in parent class. use subclass
         pass
 
@@ -122,11 +124,10 @@ class HeatPumpStudy:
                 f"{out_connection_label}_{i+out_id_increment}",
                 out_port_label,
                 f"{in_connection_label}_{i+in_id_increment}",
-                in_port_label,                
+                in_port_label,
             )
             for i in range(N)
         ]
-
 
     def add_condenser_cooling(self):
         component_list = [
@@ -155,7 +156,9 @@ class HeatPumpStudy:
     def calculate_cop(self, consumer="condenser"):
         Q = abs(self.comp[consumer].Q.val)
         W = sum(
-            comp.P.val for comp in self.comp.values() if isinstance(comp, (Compressor, Turbine))
+            comp.P.val
+            for comp in self.comp.values()
+            if isinstance(comp, (Compressor, Turbine))
         )
         return Q / W
 
@@ -167,35 +170,9 @@ class HeatPumpStudy:
 
         for i, T_cond in enumerate(condensation_temps):
             for j, T_evap in enumerate(evaporation_temps):
-                # Set the boundary conditions for the condensation and evaporation temperatures
                 self.set_boundary_conditions(T_cond, T_evap)
-
-                # Solve the network
                 self.network.solve("design")
-
                 COP = self.calculate_cop()
-
-                # Store the COP in the efficiency matrix
-                efficiency_matrix[i, j] = COP
-
-        return efficiency_matrix
-
-    def offdesign_efficiency_matrix(self):
-        condensation_temps = np.arange(50, 71, 5)
-        evaporation_temps = np.arange(-10, 11, 5)
-        efficiency_matrix = np.zeros((len(condensation_temps), len(evaporation_temps)))
-
-        for i, T_cond in enumerate(condensation_temps):
-            for j, T_evap in enumerate(evaporation_temps):
-                # Set the boundary conditions for the condensation and evaporation temperatures
-                self.set_boundary_conditions(T_cond, T_evap)
-
-                # Solve the network in off-design mode
-                self.network.solve("offdesign")
-
-                COP = self.calculate_cop()
-
-                # Store the COP in the efficiency matrix
                 efficiency_matrix[i, j] = COP
 
         return efficiency_matrix
@@ -203,7 +180,10 @@ class HeatPumpStudy:
     def get_results(self):
         results = {}
         for comp in self.comp.values():
-            if isinstance(comp, (HeatExchanger, Merge)) and "condenser" not in comp.label :
+            if (
+                isinstance(comp, (HeatExchanger, Merge))
+                and "condenser" not in comp.label
+            ):
                 results[f"{comp.label}_1"] = comp.get_plotting_data()[1]
                 results[f"{comp.label}_2"] = comp.get_plotting_data()[2]
             elif not isinstance(comp, (CycleCloser, Splitter)):
@@ -221,6 +201,7 @@ class HeatPumpStudy:
             result_dict[key]["datapoints"] = diagram.calc_individual_isoline(**data)
 
         diagram.set_limits(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max)
+
         T = np.arange(-50, 101, 5)
         Q = np.linspace(0, 1, 41)
         diagram.set_isolines(T=T, Q=Q)
@@ -233,17 +214,23 @@ class HeatPumpStudy:
             datapoints = result_dict[key]["datapoints"]
             diagram.ax.plot(datapoints["s"], datapoints["T"], color="#ff0000")
             diagram.ax.scatter(datapoints["s"][0], datapoints["T"][0], color="#ff0000")
-            # diagram.ax.annotate(key, (datapoints['s'][0], datapoints['T'][0]), textcoords="offset points", xytext=(5,5), ha='left')
+            diagram.ax.annotate(
+                key,
+                (datapoints["s"][0], datapoints["T"][0]),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+            )
 
         diagram.save(f"{filename}.svg")
 
     def plot_logph_diag(self, filename, x_min=300, x_max=700, y_min=1e0, y_max=6e1):
         from fluprodia import FluidPropertyDiagram
 
-        result_dict = self.get_results()
-
         diagram = FluidPropertyDiagram(self.working_fluid)
         diagram.set_unit_system(T="°C", p="bar", h="kJ/kg")
+
+        result_dict = self.get_results()
 
         for key, data in result_dict.items():
             result_dict[key]["datapoints"] = diagram.calc_individual_isoline(**data)
@@ -262,21 +249,49 @@ class HeatPumpStudy:
             datapoints = result_dict[key]["datapoints"]
             diagram.ax.plot(datapoints["h"], datapoints["p"], color="#ff0000")
             diagram.ax.scatter(datapoints["h"][0], datapoints["p"][0], color="#ff0000")
-            # diagram.ax.annotate(key, (datapoints['h'][0], datapoints['p'][0]), textcoords="offset points", xytext=(5,5), ha='left')
+            diagram.ax.annotate(
+                key,
+                (datapoints["h"][0], datapoints["p"][0]),
+                textcoords="offset points",
+                xytext=(5, 5),
+                ha="left",
+            )
 
         diagram.save(f"{filename}.svg")
 
-    def plot_efficiency(self, filename):
-        efficiency_matrix = self.efficiency()
+    def plot_efficiency(self, filename, efficiency_matrix=None):
+        if efficiency_matrix is None:
+            efficiency_matrix = self.efficiency_matrix()
 
         condensation_temps = np.arange(50, 71, 5)
         evaporation_temps = np.arange(-10, 11, 5)
 
+        # Plot the efficiency matrix as a heatmap with the values in the cells
         fig, ax = plt.subplots()
-        c = ax.contourf(
-            evaporation_temps, condensation_temps, efficiency_matrix, levels=20
-        )
-        fig.colorbar(c, ax=ax)
+        im = ax.imshow(efficiency_matrix, cmap="hot", interpolation="nearest")
+
+        # Create colorbar
+        cbar = ax.figure.colorbar(im, ax=ax)
+        cbar.ax.set_ylabel("COP", rotation=-90, va="bottom")
+
+        # We want to show all ticks...
+        ax.set_xticks(np.arange(len(evaporation_temps)))
+        ax.set_yticks(np.arange(len(condensation_temps)))
+        # ... and label them with the respective list entries
+        ax.set_xticklabels(evaporation_temps)
+        ax.set_yticklabels(condensation_temps)
+
+        # Loop over data dimensions and create text annotations.
+        for i in range(len(condensation_temps)):
+            for j in range(len(evaporation_temps)):
+                text = ax.text(
+                    j,
+                    i,
+                    round(efficiency_matrix[i, j], 2),
+                    ha="center",
+                    va="center",
+                    color="g",
+                )
 
         ax.set_title("Heat Pump Efficiency")
         ax.set_xlabel("Evaporation Temperature (°C)")
@@ -284,6 +299,32 @@ class HeatPumpStudy:
 
         plt.savefig(f"{filename}.png")
         plt.show()
+        return efficiency_matrix
+
+    def plot_relative_efficiency(self, filename, comparison_matrix):
+        efficiency_matrix = self.efficiency_matrix()
+        # convert to percentage of improvement
+        efficiency_matrix = (
+            (efficiency_matrix - comparison_matrix) / comparison_matrix * 100
+        )
+        return self.plot_efficiency(filename, efficiency_matrix)
+
+    def get_delta_T(self):
+        return self.get_T_max() - self.get_T_min()
+
+    def get_T_max(self):
+        return max(self.conn[key].get_attr("T").val for key in self.conn.keys())
+
+    def get_T_min(self):
+        # find the connection into the compressor that does not come from another compressor
+        for key in self.conn.keys():
+            # split the key into the two components seperated by the -
+            components = key.split("-")
+            # if the first component is not a compressor, and the second component is a compressor, then this is the connection into the compressor
+            if not components[0].startswith("compressor") and components[1].startswith(
+                "compressor"
+            ):
+                return self.conn[key].get_attr("T").val
 
 
 from itertools import chain
