@@ -216,7 +216,7 @@ class HeatPumpStudy:
             diagram.ax.scatter(datapoints["s"][0], datapoints["T"][0], color="#ff0000")
             diagram.ax.annotate(
                 key,
-                (datapoints["s"][0], datapoints["T"][0]),
+                ((datapoints["s"][0]+datapoints["s"][-1])/2, (datapoints["T"][0]+datapoints["T"][-1])/2),
                 textcoords="offset points",
                 xytext=(5, 5),
                 ha="left",
@@ -246,15 +246,17 @@ class HeatPumpStudy:
         diagram.draw_isolines("logph", isoline_data=mydata)
 
         for key in result_dict:
+            # calculate the relative coordinates of the center of the line and place the label there
+
             datapoints = result_dict[key]["datapoints"]
             diagram.ax.plot(datapoints["h"], datapoints["p"], color="#ff0000")
             diagram.ax.scatter(datapoints["h"][0], datapoints["p"][0], color="#ff0000")
             diagram.ax.annotate(
                 key,
-                (datapoints["h"][0], datapoints["p"][0]),
+                ((datapoints["h"][0]+datapoints["h"][-1])/2, (datapoints["p"][0]+datapoints["p"][-1])/2),
                 textcoords="offset points",
-                xytext=(5, 5),
-                ha="left",
+                xytext = (5, 5),
+                ha="left"
             )
 
         diagram.save(f"{filename}.svg")
