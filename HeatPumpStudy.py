@@ -48,7 +48,7 @@ class HeatPumpStudy:
         self.conn = {}
         self.network = Network(fluids=[self.working_fluid], iterinfo=iterinfo)
         self.network.set_attr(
-            p_unit="bar", T_unit="C", h_unit="kJ / kg", m_unit="kg / s"
+            p_unit="bar", T_unit="C", h_unit="kJ / kg", m_unit="kg / s", v_unit="l / s"
         )
 
         self.setup_components_and_connections()
